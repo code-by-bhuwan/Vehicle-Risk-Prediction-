@@ -8,3 +8,5 @@ matplotlib>=3.7
 plotly>=5.20
 openai>=1.30
 anthropic>=0.30
+google-genai>=0.3
+fpdf2>=2.7

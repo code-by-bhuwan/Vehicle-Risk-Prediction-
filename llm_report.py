@@ -93,6 +93,16 @@ def _llm_narrative(profile, pred_summary, top_factors, backend, api_key):
                 messages=[{"role": "user", "content": context}]
             )
             return resp.content[0].text
+        elif backend == 'gemini':
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=api_key)
+            resp = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=context,
+                config=types.GenerateContentConfig(temperature=0.4, max_output_tokens=600),
+            )
+            return resp.text
     except Exception as e:
         err = str(e).lower()
         if "auth" in err or "api_key" in err or "401" in err:
@@ -181,8 +191,31 @@ def llm_chat(user_message, history, context_blocks, backend=None, api_key=None):
             resp = client.messages.create(model="claude-sonnet-4-5", max_tokens=800,
                                            system=system_prompt, messages=messages)
             return resp.content[0].text
+        elif backend == 'gemini':
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=api_key)
+            contents = []
+            for m in history:
+                role = 'model' if m['role'] == 'assistant' else 'user'
+                contents.append(types.Content(role=role, parts=[types.Part.from_text(text=m['content'])]))
+            contents.append(types.Content(role='user', parts=[types.Part.from_text(text=user_message)]))
+            resp = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=contents,
+                config=types.GenerateContentConfig(system_instruction=system_prompt,
+                                                    temperature=0.4, max_output_tokens=800),
+            )
+            return resp.text
     except Exception as e:
-        return f"[LLM call failed: {e}]\n\n" + _keyword_fallback_answer(user_message, context_blocks)
+        err = str(e).lower()
+        if "auth" in err or "api_key" in err or "401" in err or "403" in err:
+            note = f"⚠️ {backend} API key was rejected — check it's correct."
+        elif "rate" in err or "429" in err:
+            note = f"⚠️ {backend} rate limit hit — wait a moment and try again."
+        else:
+            note = f"⚠️ {backend} call failed ({e})."
+        return note + "\n\n" + _keyword_fallback_answer(user_message, context_blocks)
 
 
 def generate_report(pipeline: VehicleRiskPipeline, df_raw, backend=None, api_key=None):
